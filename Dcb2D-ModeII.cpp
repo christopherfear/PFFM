@@ -1,4 +1,4 @@
-#include "Dcb2D-ModeI.h"
+#include "Dcb2D-ModeII.h"
 
 #include <cholmod.h>
 #include <Eigen/CholmodSupport>
@@ -13,20 +13,20 @@ int main()
 	double a0 = 0.03; // initial crack length (m)
 	double ls = 20e-6; // length scale
 	double t = 1; // thickness
-	double a_min = a0 + 1e-3; // minimum crack length before compliance calibration or dPi/dA fitting is started
+	double a_min = a0 + 3.7e-5; // minimum crack length before compliance calibration or dPi/dA fitting is started
 	
 	// material properties
 	double E_int = 126.e9; // interface Young's modulus
 	double nu_int = 0.3; // interface Poisson's ratio
-	double Gc_int = 281.; // interface fracture toughness for beam theory calculation only
-	double Gc_eff = 252.96; // effective interface fracture toughness for FEM only
+	double Gc_int = 562.; // interface fracture toughness for beam theory calculation only
+	double Gc_eff = 497.63; // effective interface fracture toughness for FEM only
 	double E_bulk = 126.e9; // bulk Young's modulus
 	double nu_bulk = 0.3; // bulk Poisson's ratio
 	double Gc_bulk = 10.*Gc_int; // bulk fracture toughness
 	bool isPlaneStress = true; // if false, plane strain
 	
 	// mesh properties
-	double Delta_y = L/4000; // initial element length at crack tip
+	double Delta_y = L/3000; // initial element length at crack tip
 	double Delta_y_max_ahead = L/10.; // max element length ahead of crack tip
 	double Delta_y_max_behind = 1e-4; // max element length behind crack tip
 	double GR_y_ahead = 1.1; // growth rate of element length ahead of crack tip
@@ -34,7 +34,7 @@ int main()
 	double Delta = hi/24; // interface element height
 	double Delta_x = Delta; // initial element height in bulk
 	double Delta_x_max = h1/10.; // max element height in bulk
-	double yminus = 2e-3; // length of refined region ahead of crack tip
+	double yminus = 4e-3; // length of refined region ahead of crack tip
 	double yplus = 1e-3; // length of refined region behind crack tip
 	double xplus = hi/2; // length of refined region above interface
 	double xminus = hi/2; // length of refined region below interface
@@ -45,7 +45,7 @@ int main()
 	// \/run parameters
 	double tol = 1e-7; // Newton's method convergence tolerance
 	double relax = 1.; // fraction of the increment to apply each iteration
-	int save_freq = 1000; // number of increments per files getting saved (1 = every increment, 2 = even increments, etc.)
+	int save_freq = 500; // number of increments per files getting saved (1 = every increment, 2 = even increments, etc.)
 	int restart_from = 0; // iteration number to restart from
 	
 	// output files
@@ -58,9 +58,9 @@ int main()
 	double Etheory = isPlaneStress ? E_bulk : E_bulk/(1. - nu_bulk*nu_bulk);
 	double h1i = h1 + hi/2; // thickness of upper arm including half interface
 	double h2i = h2 + hi/2; // thickness of lower arm including half interface
-	double Dinit = 0.5875e-3 ; // initial displacement
+	double Dinit = 8.48e-3 ; // initial displacement
 	double Dend = 100e-3; // applied displacement
-	double Dinc = 6.25e-9; // initial displacement increment
+	double Dinc = 2.5e-9; // initial displacement increment
 	
 	
 	/***************/
@@ -317,13 +317,12 @@ int main()
 				else if(i == 3) D2_history.push_back(val);
 				else if(i == 4) F2_history.push_back(val);
 				else if(i == 5) a_history.push_back(val);
-				// else if(i == 6) GcInit_CC_history.push_back(val); // don't store logged value - recalculate below based on current a_min
 				else if(i == 7) U_history.push_back(val);
 				
 				// recalculate Gc_initiation from compliance calibration based on history to this point and value of a_min
 				if(i == 5)
 				{
-					Gc_dPidA_history.push_back(GetGcFromdPidA(D1_history, F1_history, a_history, U_history, a_min));
+					GcInit_CC_history.push_back(GetGcInitiationFromComplianceCalibration(D1_history, F1_history, F2_history, a_history, a_min));
 				}
 			}
 		}
@@ -386,15 +385,15 @@ int main()
 	for(int node : support_nodes)
 	{
 		constrained.push_back(2*node); // horizontal displacement of the support nodes
-		constrained.push_back(2*node + 1); // vertical displacement on support
-	}
-	for(int node : lower_arm_end_nodes)
-	{
-		constrained.push_back(2*node + 1); // vertical displacement of lower arm nodes
+		constrained.push_back(2*node + 1); // vertical displacement of the support nodes
 	}
 	for(int node : upper_arm_end_nodes)
 	{
 		constrained.push_back(2*node + 1); // vertical displacement of upper arm nodes
+	}
+	for(int node : lower_arm_end_nodes)
+	{
+		constrained.push_back(2*node + 1); // vertical displacement of lower arm nodes
 	}
 	std::vector<double> constrainedValues(constrained.size(), 0.); // all constrained DOFs have zero value (applied displacements are updated later)
 	
@@ -437,9 +436,7 @@ int main()
 		
 		// update boundary conditions
 		size_t startIdx = initial_crack_nodes.size() + 2*support_nodes.size();
-		std::fill(constrainedValues.begin() + startIdx, constrainedValues.end(), -D); //vertical displacement on upper arm
-		size_t nextIdx = initial_crack_nodes.size() + 2*support_nodes.size() + lower_arm_end_nodes.size();
-		std::fill(constrainedValues.begin() + nextIdx, constrainedValues.end(), D); // vertical displacement on lower arm
+		std::fill(constrainedValues.begin() + startIdx, constrainedValues.end(), D);
 		
 		// combine u and s into combined solution vector
 		d.head(u.size()) = u; // assign u to first part of d
@@ -673,14 +670,15 @@ int main()
 
 				a_history.push_back(L - intact_length);
 				// std::cout << "crack length: " << (L - intact_length) << std::endl;
+			
+				// calculate Gc from compliance calibration based on history to this point and value of a_min
+				double GcInit_CC = GetGcInitiationFromComplianceCalibration(D1_history, F1_history, F2_history, a_history, a_min);
+				GcInit_CC_history.push_back(GcInit_CC);
+				std::cout << "Gc from compliance calibration = " << GcInit_CC << std::endl;
 				
 				// calculate strain energy
 				double U = 0.5*u.dot(K.topLeftCorner(u.size(), u.size())*u);
 				U_history.push_back(U);
-				
-				double Gc_dPidA = GetGcFromdPidA(D1_history, F1_history, a_history, U_history, a_min);
-				Gc_dPidA_history.push_back(Gc_dPidA);
-				std::cout << "Gc from -dPi/dA = " << Gc_dPidA << std::endl;
 
 				// save increment to CSV
 				std::cout << "Saving history.csv" << std::endl;
@@ -694,7 +692,7 @@ int main()
 						<< "," << D2_history[i]
 						<< "," << F2_history[i]
 						<< "," << a_history[i]
-						<< "," << Gc_dPidA_history[i]
+						<< "," << GcInit_CC_history[i]
 						<< "," << U_history[i]
 						<< std::endl;
 				}
@@ -2237,58 +2235,4 @@ double estimateConditionNumber(
 
     double cond_est = lambda_max / std::max(lambda_min, 1e-16);
     return cond_est;
-}
-
-double GetGcFromdPidA(const std::vector<double>& D, const std::vector<double>& P, const std::vector<double>& a, const std::vector<double>& U, double a_min)
-{
-	size_t size = 0;
-	for(size_t i = 0; i < a.size(); ++i)
-	{
-		if(a[i] > a_min)
-		{
-			size++;
-		}
-	}
-	if(size < 2) return 0;
-	
-	Eigen::VectorXd selected_a(size); // crack lengths to include in -dPi/dA fit calculation
-	Eigen::VectorXd selected_U(size); // strain energy values to include in -dPi/dA fit calculation
-	Eigen::VectorXd selected_W(size); // work values to include in -dPi/dA fit calculation
-	int offset = a.size() - size;
-	for(size_t i = offset; i < a.size(); ++i)
-	{
-		selected_a(i - offset) = a[i];
-		selected_U(i - offset) = U[i];
-		if(i == offset && i > 0)
-		{
-			selected_W(i - offset) = 0.5*(P[i] + P[i - 1])*(2.*D[i] - 2.*D[i-1]); // add dW with trapezium approximation
-		}
-		else
-		{
-			selected_W(i - offset) = selected_W(i - offset - 1) + 0.5*(P[i] + P[i - 1])*(2.*D[i] - 2.*D[i-1]); // add dW with trapezium approximation
-		}
-	}
-	
-	// Perform linear regression on:
-	// 1) U vs a using: (X^T*X)*[dUda, intercept] = X^T*y1
-	// 2) W vs a using: (X^T*X)*[dWda, intercept] = X^T*y2
-	Eigen::MatrixXd X(size, 2); // Matrix for [a, 1]
-	Eigen::VectorXd y1(size); // Vector for U
-	Eigen::VectorXd y2(size); // Vector for W
-	for (size_t i = 0; i < size; ++i)
-	{
-		X(i, 0) = selected_a(i); // a
-		X(i, 1) = 1.0; // Intercept term (constant 1 for linear regression)
-		y1(i) = selected_U(i); // U
-		y2(i) = selected_W(i); // W
-	}
-
-	Eigen::VectorXd coeffs1 = (X.transpose()*X).ldlt().solve(X.transpose()*y1);
-	Eigen::VectorXd coeffs2 = (X.transpose()*X).ldlt().solve(X.transpose()*y2);
-	double dUda = coeffs1(0); // dU/da
-	double dWda = coeffs2(0); // dW/da
-
-	
-	double Gc = -dUda + dWda;
-	return Gc;
 }

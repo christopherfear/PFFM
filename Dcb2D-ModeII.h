@@ -48,7 +48,7 @@ std::vector<double> GetQuadraticElementTensileElasticStrainEnergy(double x1, dou
 void SaveHField(const std::vector<std::vector<double>>& nodes, const std::vector<std::vector<int>>& elements, const std::vector<std::vector<double>>& H, bool isQuadratic, int quadratureDegree, std::string filename, int prec, const std::vector<std::vector<double>>& exx, const std::vector<std::vector<double>>& eyy, const std::vector<std::vector<double>>& exy, const std::vector<std::vector<double>>& tr_e);
 
 double GetGcInitiationFromComplianceCalibration(const std::vector<double>& D, const std::vector<double>& P1, const std::vector<double>& P2, const std::vector<double>& a, double a_min);
-double GetGcFromdPidA(const std::vector<double>& D, const std::vector<double>& P, const std::vector<double>& a, const std::vector<double>& U, double a_min);
+
 template<typename SparseMatrixType, typename PreconditionerType>
 double estimateConditionNumber(const SparseMatrixType& A, const PreconditionerType& M, int maxIter = 30);
 
