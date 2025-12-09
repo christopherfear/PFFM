@@ -2,11 +2,15 @@
 
 - **`Dcb2D-ModeI.cpp` and `Dcb2D-ModeI.h`** contain C++ code implementing a finite-element method (FEM) model of a double cantilever beam, which uses the phase-field fracture model for interface fracture propagation.
 
+-  **`Dcb2D-ModeII.cpp` and `Dcb2D-ModeII.h`** contain C++ code implementing a finite-element method (FEM) model of an end loaded split test, which uses the phase-field fracture model for interface fracture propagation.
+
 - The diffuse phase-field damage interacts with the surrounding bulk material, which artificially increases the apparent interface fracture toughness (assuming the bulk material has a higher fracture toughness). This effect can be mitigated by using an *effective fracture toughness* value. 
 
-- **`BVPSolverForGceff.m`** is a MATLAB script that pre-computes the effective fracture toughness for PFFM simulations using various methods.
+- **`BVPSolverForGceff.m`** is a MATLAB script that pre-computes the effective fracture toughness for pure mode-I PFFM simulations using various methods.
 
-The associated academic journal article is available [here](https://doi.org/10.1016/j.engfracmech.2025.111546).
+-  **`BVPSolverForGceff_modeII.m`** is a MATLAB script that pre-computes the effective fracture toughness for pure mode-II PFFM simulations.
+
+The associated academic journal article for the mode-I work is available [here](https://doi.org/10.1016/j.engfracmech.2025.111546).
 
 
 ## Requirements
