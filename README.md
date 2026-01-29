@@ -47,7 +47,6 @@ Model parameters (geometry, material properties, solver settings, etc.) can be m
 This project is licensed under the [MIT License](./LICENSE).  
 See the [LICENSE](./LICENSE) file for details.
 
-test
 
 ## Citation
 
