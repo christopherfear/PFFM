@@ -1,0 +1,13 @@
+# 1. The Build Directory
+build/
+
+# 2. Simulation Results
+results/
+
+# 3. Intermediate C++ Files
+*.o
+*.exe
+
+# 4. Editor/IDE Settings
+.vscode/
+compile_commands.json

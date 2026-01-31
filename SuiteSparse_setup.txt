@@ -5,17 +5,17 @@
 # reference implementation. OpenBLAS is generally faster than the reference
 # BLAS because it includes optimizations for modern hardware, portability
 # across different architectures, and dynamic CPU detection.
-sudo apt-get install libsuitesparse-dev
 
 # Old SuiteSparse installations installed from apt can be removed with:
 sudo apt remove --purge libsuitesparse-dev
 sudo rm -rf /usr/include/suitesparse
-sudo rm -rf /usr/lib/aarch64-linux-gnu/libsuitesparse*
+sudo rm -rf /usr/lib/*/libsuitesparse*
 
 # Instead, build everything from souce, beginning with OpenBLAS:
 git clone https://github.com/xianyi/OpenBLAS.git
 cd OpenBLAS
-make TARGET=CORTEXA57 HOSTCC=gcc -j$(nproc)
+# DYNAMIC_ARCH=1 enables runtime CPU detection, ensuring portability across Intel, AMD, and ARM hardware
+make DYNAMIC_ARCH=1 HOSTCC=gcc -j$(nproc)
 sudo make PREFIX=/opt/OpenBLAS install
 
 # Apt doesn't have the latest CMake, which is required to build SuiteSparse, so
