@@ -1,15 +1,22 @@
 #!/bin/bash
 
-# 1. Check if the user provided an input (I or II)
+# Get the absolute path of the directory containing this script
+# (This ensures the script works no matter where you call it from)
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+
+# 1. Check inputs
 if [ -z "$1" ]; then
     echo "Error: Please specify the mode."
-    echo "Usage: ./run.sh I   OR   ./run.sh II"
+    echo "Usage:   ./run.sh [MODE] [OPTIONAL_RESTART_DIR]"
+    echo "Example Fresh:   ./run.sh I"
+    echo "Example Restart: ./run.sh I results/ModeI_12-05-2024_10-00-00"
     exit 1
 fi
 
-# 2. Set variables based on the input
 MODE=$1
+RESTART_DIR=$2
 
+# 2. Set Compiler Variables
 if [ "$MODE" == "I" ]; then
     SOLVER_NAME="solver_modeI"
     SOURCE_FILE="apps/main_modeI.cpp"
@@ -21,55 +28,75 @@ else
     exit 1
 fi
 
-# 3. Automated build
+# 3. Automated Build (Using Absolute Paths)
 echo "---------------------------------------"
 echo "Checking Build System..."
 
-mkdir -p build
-cd build
+mkdir -p "$SCRIPT_DIR/build"
+cd "$SCRIPT_DIR/build"
 
-# Check if Makefile exists. If NOT, we must run CMake.
 if [ ! -f "Makefile" ]; then
     echo "Makefile not found. Configuring with CMake..."
     cmake ..
 fi
 
-# Run Make. 
-# NOTE: If you changed CMakeLists.txt, Make will detect it 
-# and re-run CMake automatically here.
 echo "Compiling..."
-make -j4
+make
 
-cd ..
-echo "Build Complete."
-
-# 4. Setup Timestamp and Directories
-TIMESTAMP=$(date "+%d-%m-%Y_%H-%M-%S")
-OUTPUT_DIR="results/Mode${MODE}_${TIMESTAMP}"
-
-echo "---------------------------------------"
-echo "Initializing run for Mode $MODE"
-echo "Output Directory: $OUTPUT_DIR"
-echo "---------------------------------------"
-
-mkdir -p "$OUTPUT_DIR"
-
-# 5. Snapshot the specific source code for this mode
-echo "Snapshotting parameters from $SOURCE_FILE..."
-cp "$SOURCE_FILE" "$OUTPUT_DIR/parameters_snapshot.cpp"
-
-# 6. Move into dir and run
-cd "$OUTPUT_DIR"
-
-# Check if the executable exists first
-if [ ! -f "../../build/$SOLVER_NAME" ]; then
-    echo "Error: Executable ../../build/$SOLVER_NAME not found!"
-    echo "Did you run 'cmake ..' and 'make' in the build folder?"
+# Verify executable exists
+if [ ! -f "$SOLVER_NAME" ]; then
+    echo "Error: Compilation failed. $SOLVER_NAME not found."
     exit 1
 fi
 
+# 4. Handle Directory Logic
+cd "$SCRIPT_DIR" # Go back to project root
+
+if [ -z "$RESTART_DIR" ]; then
+    # --- CASE A: FRESH RUN (No directory provided) ---
+    TIMESTAMP=$(date "+%d-%m-%Y_%H-%M-%S")
+    OUTPUT_DIR="results/Mode${MODE}_${TIMESTAMP}"
+    
+    echo "---------------------------------------"
+    echo "Initializing FRESH run for Mode $MODE"
+    echo "Output Directory: $OUTPUT_DIR"
+    echo "---------------------------------------"
+    
+    mkdir -p "$OUTPUT_DIR"
+else
+    # --- CASE B: RESTART (Directory provided) ---
+    OUTPUT_DIR="$RESTART_DIR"
+    
+    if [ ! -d "$OUTPUT_DIR" ]; then
+        echo "Error: Restart directory '$OUTPUT_DIR' does not exist!"
+        exit 1
+    fi
+    
+    echo "---------------------------------------"
+    echo "Resuming run in EXISTING directory"
+    echo "Target Directory: $OUTPUT_DIR"
+    echo "---------------------------------------"
+fi
+
+# 5. Snapshot & Run
+# We snapshot again so you have a record of the settings used for THIS restart
+echo "Snapshotting parameters from $SOURCE_FILE..."
+cp "$SOURCE_FILE" "$OUTPUT_DIR/parameters_snapshot.cpp"
+
+cd "$OUTPUT_DIR"
+
 echo "Running $SOLVER_NAME..."
-../../build/$SOLVER_NAME
+
+#ensure single core usage
+export OMP_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export VECLIB_MAXIMUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+
+# Run using absolute path to build folder
+"$SCRIPT_DIR/build/$SOLVER_NAME"
 
 echo "---------------------------------------"
 echo "Done."

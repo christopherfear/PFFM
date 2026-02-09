@@ -20,6 +20,6 @@ double GetGcFromdPidA(const std::vector<double>& D, const std::vector<double>& P
 double GetGcfromCC(const std::vector<double>& D1, const std::vector<double>& F1, const std::vector<double>& F2, const std::vector<double>& a, double a_min, double t);
 
 // Output
-void SaveHField(const std::vector<std::vector<double>>& nodes, const std::vector<std::vector<int>>& elements, const std::vector<std::vector<double>>& H, bool isQuadratic, int quadratureDegree, std::string filename, int prec, const std::vector<std::vector<double>>& exx, const std::vector<std::vector<double>>& eyy, const std::vector<std::vector<double>>& exy, const std::vector<std::vector<double>>& tr_e);
+void SaveHField(const std::vector<std::vector<double>>& nodes, const std::vector<std::vector<int>>& elements, const std::vector<double>& H, bool isQuadratic, int quadratureDegree, std::string filename, int prec, const std::vector<double>& exx, const std::vector<double>& eyy, const std::vector<double>& exy, const std::vector<double>& tr_e);
 
 #endif

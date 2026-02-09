@@ -97,10 +97,11 @@ void AssembleQuadraticPFFMVector(Eigen::VectorXd& F, const Eigen::VectorXd& f, i
 
 
 //Global assmebly
-void AssembleAll(const std::vector<std::vector<double>>& nodes, const std::vector<std::vector<int>>& elements, const Eigen::VectorXd& u, const Eigen::VectorXd& s, const std::vector<std::vector<double>>& H, double E_int, double E_bulk, double nu_int, double nu_bulk, double Gc_eff, double Gc_bulk, double t, double h2, double hi, double ls, Eigen::SparseMatrix<double>& K, Eigen::VectorXd& F, bool isPlaneStress, bool isQuadratic, int quadratureDegree)
+void AssembleAll(const std::vector<std::vector<double>>& nodes, const std::vector<std::vector<int>>& elements, const Eigen::VectorXd& u, const Eigen::VectorXd& s, const std::vector<double>& H, 
+double E_int, double E_bulk, double nu_int, double nu_bulk, double Gc_eff, double Gc_bulk, double t, double h2, double hi, double ls, Eigen::SparseMatrix<double>& K, Eigen::VectorXd& F, std::vector<Eigen::Triplet<double>>& triplets, bool isPlaneStress, bool isQuadratic, int quadratureDegree)
 {
 	// use triplets to efficiently construct sparse matrices
-	std::vector<Eigen::Triplet<double>> triplets;
+	triplets.clear();
 	if(isQuadratic)
 	{
 		triplets.reserve(324*elements.size() + 81*elements.size()); // (9*9*4 + 9*9)*elements.size()
@@ -131,9 +132,10 @@ void AssembleAll(const std::vector<std::vector<double>>& nodes, const std::vecto
     Eigen::VectorXd f_pffm_quad(9);
 	
 	std::cout << "Assembling element " << std::flush;
-	for(int i = 0; i < elements.size(); ++i)
+	int numQP = weights.size(); // Needed for offset
+    for(int i = 0; i < elements.size(); ++i)
     {
-		const std::vector<double>& H_el = H[i];
+    const double* H_el = &H[i * numQP];
         if(isQuadratic)
         {
             // Node indices
@@ -222,29 +224,21 @@ void AssembleAll(const std::vector<std::vector<double>>& nodes, const std::vecto
     K.setFromTriplets(triplets.begin(), triplets.end());
 }
 
-void UpdateH(const std::vector<std::vector<double>>& nodes, const std::vector<std::vector<int>>& elements, const Eigen::VectorXd& u, std::vector<std::vector<double>>& H, double E_int, double E_bulk, double nu_int, double nu_bulk, double h2, double hi, double ls, bool isPlaneStress, bool isQuadratic, int quadratureDegree, std::vector<std::vector<double>>&exx, std::vector<std::vector<double>>&eyy, std::vector<std::vector<double>>&exy, std::vector<std::vector<double>>&tr_e)
+void UpdateH(const std::vector<std::vector<double>>& nodes, const std::vector<std::vector<int>>& elements, const Eigen::VectorXd& u, std::vector<double>& H, double E_int, double E_bulk, double nu_int, double nu_bulk, double h2, double hi, double ls, bool isPlaneStress, bool isQuadratic, int quadratureDegree, std::vector<double>& exx, std::vector<double>& eyy, std::vector<double>& exy, std::vector<double>& tr_e)
 {
-    // 1. Calculate Quadrature ONCE (Performance Fix)
     Eigen::VectorXd xi_points, eta_points, weights;
     Get2DQuadrature(quadratureDegree, xi_points, eta_points, weights);
 
-    // 2. Allocate reusable vectors ONCE (Performance Fix)
     int num_points = weights.size();
-    std::vector<double> H_new;
-    std::vector<double> exx_i;
-    std::vector<double> eyy_i;
-    std::vector<double> exy_i;
-    std::vector<double> tr_e_i;
-
-    // Reserve memory to prevent re-allocation
-    H_new.reserve(num_points);
-    exx_i.reserve(num_points);
-    eyy_i.reserve(num_points);
-    exy_i.reserve(num_points);
-    tr_e_i.reserve(num_points);
+    std::vector<double> H_local(num_points);
+    std::vector<double> exx_local(num_points);
+    std::vector<double> eyy_local(num_points);
+    std::vector<double> exy_local(num_points);
+    std::vector<double> tr_e_local(num_points);
 
     std::cout << "Updating H in element " << std::flush;
-    
+    Eigen::VectorXd u_el_quad(18); 
+    Eigen::VectorXd u_el_lin(8); 
     for(int i = 0; i < elements.size(); ++i)
     {
         if(isQuadratic)
@@ -271,23 +265,12 @@ void UpdateH(const std::vector<std::vector<double>>& nodes, const std::vector<st
             double E = (y9 > h2 && y9 < h2 + hi) ? E_int : E_bulk;
             double nu = (y9 > h2 && y9 < h2 + hi) ? nu_int : nu_bulk;
             
-            Eigen::VectorXd u_el(18); 
-            u_el << u(2*n1), u(2*n1 + 1), u(2*n2), u(2*n2 + 1), u(2*n3), u(2*n3 + 1), u(2*n4), u(2*n4 + 1), u(2*n5), u(2*n5 + 1), u(2*n6), u(2*n6 + 1), u(2*n7), u(2*n7 + 1), u(2*n8), u(2*n8 + 1), u(2*n9), u(2*n9 + 1);
+           
+            u_el_quad << u(2*n1), u(2*n1 + 1), u(2*n2), u(2*n2 + 1), u(2*n3), u(2*n3 + 1), u(2*n4), u(2*n4 + 1), u(2*n5), u(2*n5 + 1), u(2*n6), u(2*n6 + 1), u(2*n7), u(2*n7 + 1), u(2*n8), u(2*n8 + 1), u(2*n9), u(2*n9 + 1);
             
-            // Pass the pre-allocated vectors by reference
-            GetQuadraticElementTensileElasticStrainEnergy(x1, y1, x2, y2, x3, y3, x4, y4, x5, y5, x6, y6, x7, y7, x8, y8, x9, y9, E, nu, u_el, isPlaneStress, xi_points, eta_points, weights, H_new, exx_i, eyy_i, exy_i, tr_e_i);
-            
-            // Update global H with irreversibility (max)
-            std::vector<double>& H_old = H[i];
-            for(int k = 0; k < num_points; ++k) {
-                H_old[k] = std::max(H_old[k], H_new[k]);
-            }
-            
-            // Store strains
-            exx[i] = exx_i;
-            eyy[i] = eyy_i;
-            exy[i] = exy_i;
-            tr_e[i] = tr_e_i;
+            GetQuadraticElementTensileElasticStrainEnergy(x1, y1, x2, y2, x3, y3, x4, y4, x5, y5, x6, y6, x7, y7, x8, y8, x9, y9, 
+                                                          E, nu, u_el_quad, isPlaneStress, xi_points, eta_points, weights, 
+                                                          H_local.data(), exx_local.data(), eyy_local.data(), exy_local.data(), tr_e_local.data());
         }
         else // linear elements (4 nodes)
         {
@@ -304,23 +287,29 @@ void UpdateH(const std::vector<std::vector<double>>& nodes, const std::vector<st
             double E = (yc > h2 && yc < h2 + hi) ? E_int : E_bulk;
             double nu = (yc > h2 && yc < h2 + hi) ? nu_int : nu_bulk;
             
-            Eigen::VectorXd u_el(8); 
-            u_el << u(2*n1), u(2*n1 + 1), u(2*n2), u(2*n2 + 1), u(2*n3), u(2*n3 + 1), u(2*n4), u(2*n4 + 1);
             
-            // Pass the pre-allocated vectors by reference
-            GetLinearElementTensileElasticStrainEnergy(x1, y1, x2, y2, x3, y3, x4, y4, E, nu, u_el, isPlaneStress, xi_points, eta_points, weights, H_new, exx_i, eyy_i, exy_i, tr_e_i);
+            u_el_lin << u(2*n1), u(2*n1 + 1), u(2*n2), u(2*n2 + 1), u(2*n3), u(2*n3 + 1), u(2*n4), u(2*n4 + 1);
             
-            // Update global H with irreversibility (max)
-            std::vector<double>& H_old = H[i];
-            for(int k = 0; k < num_points; ++k) {
-                H_old[k] = std::max(H_old[k], H_new[k]);
+            GetLinearElementTensileElasticStrainEnergy(x1, y1, x2, y2, x3, y3, x4, y4, 
+                                                       E, nu, u_el_lin, isPlaneStress, xi_points, eta_points, weights, 
+                                                       H_local.data(), exx_local.data(), eyy_local.data(), exy_local.data(), tr_e_local.data());
+        }
+        
+        // COPY BACK TO GLOBAL FLAT ARRAYS
+        for(int k = 0; k < num_points; ++k) {
+            // Calculate where this QP lives in the giant vector
+            int global_idx = i * num_points + k;
+
+            // Update H (Irreversibility check)
+            if (H_local[k] > H[global_idx]) {
+                H[global_idx] = H_local[k];
             }
 
-            // Store strains
-            exx[i] = exx_i;
-            eyy[i] = eyy_i;
-            exy[i] = exy_i;
-            tr_e[i] = tr_e_i;
+            // Store Strains (Overwriting is fine)
+            exx[global_idx] = exx_local[k];
+            eyy[global_idx] = eyy_local[k];
+            exy[global_idx] = exy_local[k];
+            tr_e[global_idx] = tr_e_local[k];
         }
         
         if((i + 1) % 10000 == 0) std::cout << i + 1 << ", " << std::flush;

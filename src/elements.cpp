@@ -243,7 +243,7 @@ void QuadraticSolidElement(double x1, double y1, double x2, double y2, double x3
 		Eigen::Matrix<double, 2, 9> dN_local;
 		dN_local << dN1_dxi, dN2_dxi, dN3_dxi, dN4_dxi, dN5_dxi, dN6_dxi, dN7_dxi, dN8_dxi, dN9_dxi, 
 			dN1_deta, dN2_deta, dN3_deta, dN4_deta, dN5_deta, dN6_deta, dN7_deta, dN8_deta, dN9_deta;
-		Eigen::MatrixXd dN_global = J_inv*dN_local;
+		Eigen::Matrix<double, 2, 9> dN_global = J_inv*dN_local;
 		double dN1_dx = dN_global(0, 0);
 		double dN2_dx = dN_global(0, 1);
 		double dN3_dx = dN_global(0, 2);
@@ -292,12 +292,10 @@ void QuadraticSolidElement(double x1, double y1, double x2, double y2, double x3
 void LinearPFFMElement(double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4, 
                        double Gc, double ls, 
                        const Eigen::Matrix<double, 4, 1>& s,
-                       const std::vector<double>& H,
+                       const double* H,
                        const Eigen::VectorXd& xi_points, const Eigen::VectorXd& eta_points, const Eigen::VectorXd& weights, 
                        Eigen::MatrixXd& k, Eigen::VectorXd& f)
 {
-	
-	// Resize outputs only if needed (Avoids malloc if already correct size)
     if(k.rows() != 4 || k.cols() != 4) k.resize(4, 4);
     k.setZero();
     
@@ -358,7 +356,7 @@ void LinearPFFMElement(double x1, double y1, double x2, double y2, double x3, do
 void QuadraticPFFMElement(double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4, double x5, double y5, double x6, double y6, double x7, double y7, double x8, double y8, double x9, double y9, 
                           double Gc, double ls, 
                           const Eigen::Matrix<double, 9, 1>& s,
-                          const std::vector<double>& H,
+                          const double* H,
                           const Eigen::VectorXd& xi_points, const Eigen::VectorXd& eta_points, const Eigen::VectorXd& weights, 
                           Eigen::MatrixXd& k, Eigen::VectorXd& f)
 {
@@ -440,8 +438,8 @@ void GetLinearElementTensileElasticStrainEnergy(
     double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4, 
     double E, double nu, const Eigen::VectorXd& u, bool plane_stress, 
     const Eigen::VectorXd& xi_points, const Eigen::VectorXd& eta_points, const Eigen::VectorXd& weights,
-    std::vector<double>& H_new, 
-    std::vector<double>& exx_i, std::vector<double>& eyy_i, std::vector<double>& exy_i, std::vector<double>& tr_e_i)
+    double* H_new, 
+	double* exx_i, double* eyy_i, double* exy_i, double* tr_e_i)
 {
     // Constitutive Matrix D
     Eigen::MatrixXd D(3, 3);
@@ -458,11 +456,6 @@ void GetLinearElementTensileElasticStrainEnergy(
 
     // Ensure vectors are the right size (Cheap if size hasn't changed)
     int num_points = weights.size();
-    if(H_new.size() != num_points) H_new.resize(num_points);
-    if(exx_i.size() != num_points) exx_i.resize(num_points);
-    if(eyy_i.size() != num_points) eyy_i.resize(num_points);
-    if(exy_i.size() != num_points) exy_i.resize(num_points);
-    if(tr_e_i.size() != num_points) tr_e_i.resize(num_points);
 	for(int p = 0; p < weights.size(); ++p) // loop integration points
 	{
 		double xi = xi_points(p);
@@ -539,11 +532,10 @@ void GetQuadraticElementTensileElasticStrainEnergy(
     double x7, double y7, double x8, double y8, double x9, double y9, 
     double E, double nu, const Eigen::VectorXd& u, bool plane_stress, 
     const Eigen::VectorXd& xi_points, const Eigen::VectorXd& eta_points, const Eigen::VectorXd& weights,
-    std::vector<double>& H_out, 
-    std::vector<double>& exx_i, std::vector<double>& eyy_i, 
-    std::vector<double>& exy_i, std::vector<double>& tr_e_i)
+	double* H_out, 
+	double* exx_i, double* eyy_i, 
+	double* exy_i, double* tr_e_i)
 {
-    // 1. Setup D Matrix (Constitutive)
     Eigen::MatrixXd D(3, 3);
     double K;
     if(plane_stress) {
@@ -556,13 +548,7 @@ void GetQuadraticElementTensileElasticStrainEnergy(
         K = E/2./(1. + nu)/(1. - 2.*nu);
     }
 
-    // 2. RESIZE CHECK (Only allocates if size changed, which shouldn't happen after 1st iter)
     int nPoints = weights.size();
-    if(H_out.size() != nPoints) H_out.resize(nPoints);
-    if(exx_i.size() != nPoints) exx_i.resize(nPoints);
-    if(eyy_i.size() != nPoints) eyy_i.resize(nPoints);
-    if(exy_i.size() != nPoints) exy_i.resize(nPoints);
-    if(tr_e_i.size() != nPoints) tr_e_i.resize(nPoints);
 
     for(int p = 0; p < nPoints; ++p) 
     {

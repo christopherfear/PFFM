@@ -136,13 +136,15 @@ double GetGcfromCC(const std::vector<double>& D, const std::vector<double>& F1, 
 }
 
 // Field extraction for visualisation
-void SaveHField(const std::vector<std::vector<double>>& nodes, const std::vector<std::vector<int>>& elements, const std::vector<std::vector<double>>& H, bool isQuadratic, int quadratureDegree, std::string filename, int prec, const std::vector<std::vector<double>>& exx, const std::vector<std::vector<double>>& eyy, const std::vector<std::vector<double>>& exy, const std::vector<std::vector<double>>& tr_e)
+void SaveHField(const std::vector<std::vector<double>>& nodes, const std::vector<std::vector<int>>& elements, const std::vector<double>& H, bool isQuadratic, int quadratureDegree, std::string filename, int prec, const std::vector<double>& exx, const std::vector<double>& eyy, const std::vector<double>& exy, const std::vector<double>& tr_e)
 {
 	Eigen::VectorXd xi_points;
 	Eigen::VectorXd eta_points;
 	Eigen::VectorXd weights;
 	Get2DQuadrature(quadratureDegree, xi_points, eta_points, weights);
 	
+	int numQP = weights.size();
+
 	// save H field to CSV
 	std::ofstream outfile(filename); // overwrite
 	outfile << "x,y,H,exx,eyy,exy,tr_e" << std::endl;
@@ -196,20 +198,24 @@ void SaveHField(const std::vector<std::vector<double>>& nodes, const std::vector
 				double N9 = (eta*eta - 1.)*(xi*xi - 1.);
 				double xp = N1*x1 + N2*x2 + N3*x3 + N4*x4 + N5*x5 + N6*x6 + N7*x7 + N8*x8 + N9*x9;
 				double yp = N1*y1 + N2*y2 + N3*y3 + N4*y4 + N5*y5 + N6*y6 + N7*y7 + N8*y8 + N9*y9;
-				double Hval = H[i][p]; // H[i][j] = H for element i at integration point j
-				double exxval = exx[i][p]; // H[i][j] = H for element i at integration point j
-				double eyyval = eyy[i][p]; // H[i][j] = H for element i at integration point j
-				double exyval = exy[i][p]; // H[i][j] = H for element i at integration point j
-				double tr_eval = tr_e[i][p]; // H[i][j] = H for element i at integration point j
+
 				
-				outfile << xp
-					<< "," << yp
-					<< "," << Hval
-					<< "," << exxval
-					<< "," << eyyval
-					<< "," << exyval
-					<< "," << tr_eval
-					<< std::endl;
+                int idx = i * numQP + p; // FLATTENED INDEXING
+
+                double Hval = H[idx]; 
+                double exxval = exx[idx];
+                double eyyval = eyy[idx];
+                double exyval = exy[idx];
+                double tr_eval = tr_e[idx];
+                
+                outfile << xp
+                    << "," << yp
+                    << "," << Hval
+                    << "," << exxval
+                    << "," << eyyval
+                    << "," << exyval
+                    << "," << tr_eval
+                    << std::endl;
 			}
 		}
 		else // linear elements (4 nodes)
@@ -238,20 +244,24 @@ void SaveHField(const std::vector<std::vector<double>>& nodes, const std::vector
 				double N4 = (1. + eta)*(1. - xi)/4.;
 				double xp = N1*x1 + N2*x2 + N3*x3 + N4*x4;
 				double yp = N1*y1 + N2*y2 + N3*y3 + N4*y4;
-				double Hval = H[i][p]; // H[i][j] = H for element i at integration point j
-				double exxval = exx[i][p]; // H[i][j] = H for element i at integration point j
-				double eyyval = eyy[i][p]; // H[i][j] = H for element i at integration point j
-				double exyval = exy[i][p]; // H[i][j] = H for element i at integration point j
-				double tr_eval = tr_e[i][p]; // H[i][j] = H for element i at integration point j
-				
-				outfile << xp
-					<< "," << yp
-					<< "," << Hval
-					<< "," << exxval
-					<< "," << eyyval
-					<< "," << exyval
-					<< "," << tr_eval
-					<< std::endl;
+
+		
+                int idx = i * numQP + p;	// FLATTENED INDEXING
+
+                double Hval = H[idx]; 
+                double exxval = exx[idx];
+                double eyyval = eyy[idx];
+                double exyval = exy[idx];
+                double tr_eval = tr_e[idx];
+                
+                outfile << xp
+                    << "," << yp
+                    << "," << Hval
+                    << "," << exxval
+                    << "," << eyyval
+                    << "," << exyval
+                    << "," << tr_eval
+                    << std::endl;
 			}
 		}
 	}

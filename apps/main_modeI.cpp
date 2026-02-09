@@ -167,9 +167,25 @@ int main()
 
 	Eigen::VectorXd u = Eigen::VectorXd::Zero(2*numNodes);
 	Eigen::VectorXd s = Eigen::VectorXd::Ones(numNodes);
-	std::vector<std::vector<double>> H, exx, eyy, exy, tr_e;
+	std::vector<double> H, exx, eyy, exy, tr_e; // Flat vectors for history variables
 	std::vector<double> F1_history, D1_history, F2_history, D2_history, a_history, Gc_dPidA_history, U_history;
+
+    std::vector<Eigen::Triplet<double>> triplets; // Pre-allocated buffer to avoid repeated memory allocation during assembly
+    std::ofstream history_file; // Persistent file stream (keeps file open during loop)
 	int incr_count = 0;
+
+	// Determine Quadrature size for flat array sizing
+    Eigen::VectorXd xi_points, eta_points, weights;
+    Get2DQuadrature(quadratureDegree, xi_points, eta_points, weights);
+    int numQP = weights.size();
+    size_t totalIPs = numElements * numQP; // Total Integration Points
+
+    // ALLOCATE MEMORY ONCE
+    H.resize(totalIPs, 0.0);
+    exx.resize(totalIPs, 0.0);
+    eyy.resize(totalIPs, 0.0);
+    exy.resize(totalIPs, 0.0);
+    tr_e.resize(totalIPs, 0.0);
 
     if(restart_from > 0) // load in starting condition from saved files
     {
@@ -216,7 +232,7 @@ int main()
         file.close();
         std::cout << "Done!" << std::endl;
         
-        // read H from Hfilename
+        // Read H into flat vector
         filename = Hfilename;
         filename += std::to_string(incr_count);
         filename += ".csv";
@@ -228,18 +244,14 @@ int main()
             return 1;
         }
         std::getline(file, line); // skip header row
-        Eigen::VectorXd xi_points, eta_points, weights; // integration points and weightings
-        Get2DQuadrature(quadratureDegree, xi_points, eta_points, weights);
-        while(std::getline(file, line))
+        
+        size_t idx = 0;
+
+        while(std::getline(file, line) && idx < totalIPs)
         {
-            std::vector<double> Hi;
-            for(unsigned int i = 0; i < weights.size(); ++i)
-            {
-                if(i > 0) std::getline(file, line);
-                std::vector<std::string> fields = splitByComma(line);
-                Hi.push_back(std::stod(fields[2]));
-            }
-            H.push_back(Hi);
+             auto fields = splitByComma(line);
+             H[idx] = std::stod(fields[2]);
+             idx++;
         }
         file.close();
         std::cout << "Done!" << std::endl;
@@ -249,25 +261,35 @@ int main()
         file = std::ifstream(history_filename);
         if(!file.is_open())
         {
-            std::cerr << "Could not open " << filename << "!" << std::endl;
+            std::cerr << "Could not open " << history_filename << "!" << std::endl;
             return 1;
         }
-        std::getline(file, line); // skip header row
+
+        std::vector<std::string> valid_lines; // vector to store lines to keep
+
+        // Handle Header
+        if(std::getline(file, line)) {
+             valid_lines.push_back(line); 
+        }
+
         while(std::getline(file, line))
         {
             std::vector<std::string> fields = splitByComma(line);
+            
+            // Check if this line is "from the future" relative to restart point
+            if(!fields.empty()) {
+                int inc = std::stoi(fields[0]);
+                if(inc > restart_from) break; // Stop reading AND stop saving lines
+            }
+
+            valid_lines.push_back(line);
+
+            // Parse data into vectors (Standard logic)
             for(size_t i = 0; i < fields.size(); i++)
-            {
-                if(i == 0)
-                {
-                    int inc = std::stoi(fields[i]);
-                    if(inc > restart_from) break;
-                }
-                
+            {   
                 double val = std::stod(fields[i]);
-                
-                if(i == 1)
-                {
+
+                if(i == 1) {
                     D1_history.push_back(val);
                     Dinit = val;
                 }
@@ -275,18 +297,27 @@ int main()
                 else if(i == 3) D2_history.push_back(val);
                 else if(i == 4) F2_history.push_back(val);
                 else if(i == 5) a_history.push_back(val);
-                // else if(i == 6) GcInit_CC_history.push_back(val); // don't store logged value - recalculate below based on current a_min
                 else if(i == 7) U_history.push_back(val);
-                
+
                 // recalculate Gc_initiation from compliance calibration based on history to this point and value of a_min
-                if(i == 5)
-                {
+                if(i == 5) {
                     Gc_dPidA_history.push_back(GetGcFromdPidA(D1_history, F1_history, a_history, U_history, a_min));
                 }
             }
         }
         file.close();
         std::cout << "Done!" << std::endl;
+
+        std::cout << "Truncating " << history_filename << " to increment " << restart_from << "..." << std::endl;
+        history_file.open(history_filename, std::ios::out);
+        for(const auto& l : valid_lines) {
+            history_file << l << std::endl;
+        }
+        history_file.close();
+
+        history_file.open(history_filename, std::ios::app);
+        history_file << std::fixed << std::setprecision(prec);
+
         Dinit += Dinc; // start on next increment
         incr_count++; // start on next increment
     }
@@ -297,18 +328,10 @@ int main()
         {
             s[node] = 0;
         }
-
-        // fresh allocation for field variables
-        Eigen::VectorXd xi_points, eta_points, weights; // integration points and weightings
-        Get2DQuadrature(quadratureDegree, xi_points, eta_points, weights);
-        for(size_t i = 0; i < numElements; ++i)
-        {
-			// vector of zeros to allocate memeory
-        	std::vector<double> zeros(weights.size(), 0.);
-			H.push_back(zeros);
-			exx.push_back(zeros); eyy.push_back(zeros); exy.push_back(zeros); tr_e.push_back(zeros);
-        }
-        
+		// Open history file for writing
+        history_file.open(history_filename);
+        history_file << "inc,D1,F1,D2,F2,a,G_c,U" << std::endl;
+        history_file << std::fixed << std::setprecision(prec);        
     }
 
 	// ---------------------------------------------------
@@ -371,7 +394,7 @@ int main()
 			printf("Iteration: %d\n", iter_count);
 			
 			// Call Assembly
-			AssembleAll(nodes, elements, u, s, H, E_int, E_bulk, nu_int, nu_bulk, Gc_eff, Gc_bulk, t, mp.h2, mp.hi, ls, K, F, isPlaneStress, mp.isQuadratic, quadratureDegree);
+			AssembleAll(nodes, elements, u, s, H, E_int, E_bulk, nu_int, nu_bulk, Gc_eff, Gc_bulk, t, mp.h2, mp.hi, ls, K, F, triplets, isPlaneStress, mp.isQuadratic, quadratureDegree);
 
 			// Call BCs
 			ApplyDirichletBC(K, F, isConstrained, constrainedMap, freeMap, KR, FR);
@@ -440,16 +463,16 @@ int main()
 
 				// Save History
 				std::cout << "Saving history.csv" << std::endl;
-				std::ofstream outfile(history_filename);
-				outfile << "inc,D1,F1,D2,F2,a,G_c,U" << std::endl;
-				outfile << std::fixed << std::setprecision(prec);
-				for(size_t i = 0; i < F1_history.size(); ++i) {
-					outfile << i << "," << D1_history[i] << "," << F1_history[i] << "," << D2_history[i] << "," 
-					        << F2_history[i] << "," << a_history[i] << "," << Gc_dPidA_history[i] << "," 
-							<< U_history[i] << std::endl;
-				}
-				outfile.close();
-				break;
+                history_file << incr_count << "," 
+                             << D1_history.back() << "," 
+                             << F1_history.back() << "," 
+                             << D2_history.back() << "," 
+                             << F2_history.back() << "," 
+                             << a_history.back() << "," 
+                             << Gc_dPidA_history.back() << "," 
+                             << U_history.back() << std::endl;
+
+                break;
 			}
 			++iter_count;
 		}
