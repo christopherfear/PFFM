@@ -51,7 +51,7 @@ protected:
         Gc_eff = 252.96; // Effective fracture toughness
 
         // run controls
-        D = 0.6875e-3;        // Dinit (Starting displacement)
+        D = 0.5875e-3;        // Dinit (Starting displacement)
         Dinc = 6.25e-9;       // Step size
         Dend = 100e-3;        // End displacement
         tol = 1e-7;           // Tolerance
