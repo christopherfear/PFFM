@@ -19,10 +19,11 @@ RESTART_DIR=$2
 # 2. Set Compiler Variables
 if [ "$MODE" == "I" ]; then
     SOLVER_NAME="solver_modeI"
-    SOURCE_FILE="apps/main_modeI.cpp"
+    # We now care about the HEADER for the snapshot
+    HEADER_FILE="include/ModeI.h" 
 elif [ "$MODE" == "II" ]; then
     SOLVER_NAME="solver_modeII"
-    SOURCE_FILE="apps/main_modeII.cpp"
+    HEADER_FILE="include/ModeII.h"
 else
     echo "Error: Invalid mode '$MODE'. Please use 'I' or 'II'."
     exit 1
@@ -80,8 +81,8 @@ fi
 
 # 5. Snapshot & Run
 # We snapshot again so you have a record of the settings used for THIS restart
-echo "Snapshotting parameters from $SOURCE_FILE..."
-cp "$SOURCE_FILE" "$OUTPUT_DIR/parameters_snapshot.cpp"
+echo "Snapshotting parameters from $HEADER_FILE..."
+cp "$SCRIPT_DIR/$HEADER_FILE" "$OUTPUT_DIR/parameters_snapshot.h"
 
 cd "$OUTPUT_DIR"
 
