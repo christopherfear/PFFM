@@ -2,11 +2,14 @@ cmake_minimum_required(VERSION 3.10)
 project(PFFM_Solver)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)  
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE) #true for run false for debug
 
 # 1. Settings
 set(CMAKE_CXX_STANDARD 14)
-# Optimization flags - kept your high-performance setup
+# Optimization flags
+#debugging
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0 -Wall")
+#optimised running
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fno-math-errno -DNDEBUG -march=native")
 
 # 2. Include Paths
@@ -15,7 +18,7 @@ include_directories($ENV{HOME}/PFFM/eigen-3.4.0)
 include_directories(/opt/OpenBLAS/include)
 include_directories(/usr/local/cuda/include)
 
-# 3. Handle Cholmod (Kept as is - this is excellent)
+# 3. Handle Cholmod
 find_library(CHOLMOD_LIB NAMES cholmod PATHS /opt/SuiteSparse/lib /usr/local/lib /usr/lib)
 if(CHOLMOD_LIB)
     message(STATUS ">> Cholmod FOUND. High-performance solver enabled.")
@@ -29,15 +32,10 @@ else()
     set(SPARSE_LIBS "")
 endif()
 
-# 4. Create Core Library (Your src/ files: assembly.cpp, mesh.cpp, etc.)
+# 4. Create Core Library
 file(GLOB SOURCE_FILES "src/*.cpp")
 add_library(pffm_core ${SOURCE_FILES})
 
 # 5. Create Executables
-# Note: Since main_modeI.cpp is now tiny, it compiles very fast.
 add_executable(solver_modeI apps/main_modeI.cpp)
 target_link_libraries(solver_modeI pffm_core ${SPARSE_LIBS})
-
-# If you create ModeII.h later, just add its app here
-# add_executable(solver_modeII apps/main_modeII.cpp)
-# target_link_libraries(solver_modeII pffm_core ${SPARSE_LIBS})

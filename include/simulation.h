@@ -49,7 +49,7 @@ class simulation {
         // run parameters
         double tol, relax, s_threshold, D, Dinc, Dend;
         int quadratureDegree, incr_count, save_freq, restart_from, prec;
-        bool isPlaneStress, isQuadratic;
+        bool isPlaneStress;
 
         // filenames
         std::string Hfilename = "H,inc=", usfilename = "inc=", history_filename = "history.csv";
@@ -116,6 +116,64 @@ class simulation {
             return tokens;
         }
 
+        void IdentifyNodeSets() {
+            sets = NodeSets();
+
+            double findtol = mp.Delta/10;
+            for(size_t i = 0; i < nodes.size(); ++i)
+            {
+                double x = nodes[i][0];
+                double y = nodes[i][1];
+                
+                // set of nodes forming the initial crack
+                if((x >= (mp.L - mp.a0) - findtol) && (std::abs(y - (mp.h2 + mp.hi/2)) < findtol))
+                {
+                    sets.initial_crack_nodes.push_back(i);
+                }
+                
+                // set of nodes forming the centreline of the interface
+                if((x <= (mp.L - mp.a0) + findtol) && (std::abs(y - (mp.h2 + mp.hi/2)) < findtol))
+                {
+                    sets.centreline_nodes.push_back(i);
+                }
+                
+                // set of all nodes forming the interface
+                if((x <= (mp.L - mp.a0) + findtol) && (y >= mp.h2 - findtol) && (y <= mp.h2 + mp.hi + findtol))
+                {
+                    sets.interface_nodes.push_back(i);
+                }
+                
+                // set of nodes on end of upper arm
+                if((y >= (mp.h2 + mp.hi) - findtol) && (std::abs(x - mp.L) < findtol))
+                {
+                    sets.upper_arm_end_nodes.push_back(i);
+                }
+                
+                // set of nodes on end of lower arm
+                if((y <= mp.h2 + findtol) && (std::abs(x - mp.L) < findtol))
+                {
+                    sets.lower_arm_end_nodes.push_back(i);
+                }
+                
+                // set of nodes on support end
+                if((std::abs(x) < findtol))
+                {
+                    sets.support_nodes.push_back(i);
+                }
+            }
+        }
+
+        void SaveGeometryData() {
+            std::ofstream outfile("geometry.csv");
+            if(outfile.is_open()) {
+                outfile << "L,h1,h2,hi,a0\n";
+                outfile << std::fixed << std::setprecision(prec) 
+                        << mp.L << "," << mp.h1 << "," 
+                        << mp.h2 << "," << mp.hi << "," << mp.a0 << std::endl;
+                outfile.close();
+            }
+        }
+
         void Initialise() {
             int numNodes = nodes.size();
             int totalDOFs = 3 * numNodes;
@@ -158,6 +216,7 @@ class simulation {
             for(int i = 0; i < 3*numNodes; ++i) if(!isConstrained[i]) freeMap[i] = nFree++;
 
             if (restart_from == 0) {
+                incr_count = 0;
                 history_file.open(history_filename);
                 history_file << "inc,D1,F1,D2,F2,a,G_c,U" << std::endl;
                 history_file << std::fixed << std::setprecision(prec);  
@@ -257,7 +316,7 @@ class simulation {
                 while(true) {
                     AssembleAll(nodes, elements, u, s, H, E_int, E_bulk, nu_int, nu_bulk, 
                                 Gc_eff, Gc_bulk, t, mp.h2, mp.hi, ls, K, F, triplets, 
-                                isPlaneStress, isQuadratic, quadratureDegree);
+                                isPlaneStress, mp.isQuadratic, quadratureDegree);
 
                     ApplyDirichletBC(K, F, isConstrained, constrainedMap, freeMap, KR, FR);
 
@@ -274,13 +333,13 @@ class simulation {
 
                     for(int i = 0; i < totalDOFs; ++i) Dd[i] = (freeMap[i] != -1) ? Dd_reduced[freeMap[i]] : 0.0;
                     d += relax * Dd;
-                    for(auto const& [dof, valPtr] : constrainedMap) d[dof] = *valPtr;
+                    for(auto const& pair : constrainedMap) d[pair.first] = *pair.second;
 
                     u = d.head(u.size()); s = d.tail(s.size());
                     iter_count++;
                 }
                 UpdateH(nodes, elements, u, H, E_int, E_bulk, nu_int, nu_bulk, mp.h2, mp.hi, 
-                    ls, isPlaneStress, isQuadratic, quadratureDegree, exx, eyy, exy, tr_e);
+                    ls, isPlaneStress, mp.isQuadratic, quadratureDegree, exx, eyy, exy, tr_e);
             return true;
         }
         

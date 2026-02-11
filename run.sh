@@ -9,7 +9,7 @@ if [ -z "$1" ]; then
     echo "Error: Please specify the mode."
     echo "Usage:   ./run.sh [MODE] [OPTIONAL_RESTART_DIR]"
     echo "Example Fresh:   ./run.sh I"
-    echo "Example Restart: ./run.sh I results/ModeI_12-05-2024_10-00-00"
+    echo "Example Restart: ./run.sh I results/modeI_12-05-2024_10-00-00"
     exit 1
 fi
 
@@ -19,11 +19,10 @@ RESTART_DIR=$2
 # 2. Set Compiler Variables
 if [ "$MODE" == "I" ]; then
     SOLVER_NAME="solver_modeI"
-    # We now care about the HEADER for the snapshot
-    HEADER_FILE="include/ModeI.h" 
+    SOURCE_SNAPSHOT="apps/main_modeI.cpp"
 elif [ "$MODE" == "II" ]; then
     SOLVER_NAME="solver_modeII"
-    HEADER_FILE="include/ModeII.h"
+    SOURCE_SNAPSHOT="apps/main_modeI.cpp"
 else
     echo "Error: Invalid mode '$MODE'. Please use 'I' or 'II'."
     exit 1
@@ -80,24 +79,46 @@ else
 fi
 
 # 5. Snapshot & Run
-# We snapshot again so you have a record of the settings used for THIS restart
-echo "Snapshotting parameters from $HEADER_FILE..."
-cp "$SCRIPT_DIR/$HEADER_FILE" "$OUTPUT_DIR/parameters_snapshot.h"
+echo "Snapshotting parameters from $SOURCE_SNAPSHOT..."
+cp "$SCRIPT_DIR/$SOURCE_SNAPSHOT" "$OUTPUT_DIR/source_backup.cpp"
 
 cd "$OUTPUT_DIR"
 
+# --- CRITICAL FIX: Get the Absolute Path ---
+# Since we just cd'd into the folder, $(pwd) gives us the full, real path.
+FULL_PATH=$(pwd)
+
+if [ -z "$RESTART_DIR" ]; then
+    # --- FRESH RUN ---
+    # Pass the full path so C++ writes to the correct place
+    EXEC_ARGS="$FULL_PATH"
+    
+else
+    # --- RESTART RUN ---
+    RESTART_INC=$(ls inc=*.csv 2>/dev/null | sed 's/inc=\(.*\)\.csv/\1/' | sort -n | tail -1)
+    
+    if [ -z "$RESTART_INC" ]; then 
+        echo "Warning: No output files found. Defaulting restart to 0."
+        RESTART_INC=0
+    else
+        echo ">> Auto-detected restart increment: $RESTART_INC"
+    fi
+
+    # Pass the full path + increment
+    EXEC_ARGS="$FULL_PATH $RESTART_INC"
+fi
+
 echo "Running $SOLVER_NAME..."
 
-#ensure single core usage
+# Thread controls
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 
-
-# Run using absolute path to build folder
-"$SCRIPT_DIR/build/$SOLVER_NAME"
+# Run the solver
+"$SCRIPT_DIR/build/$SOLVER_NAME" $EXEC_ARGS
 
 echo "---------------------------------------"
 echo "Done."
