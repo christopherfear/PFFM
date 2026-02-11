@@ -52,7 +52,7 @@ class simulation {
         bool isPlaneStress;
 
         // filenames
-        std::string Hfilename = "H,inc=", usfilename = "inc=", history_filename = "history.csv";
+        std::string Hfilename, usfilename, history_filename, mode_name;
         std::ofstream history_file;
 
         // boundary condition mapping
@@ -65,9 +65,10 @@ class simulation {
     public:
         virtual ~simulation() = default;
 
-        void Run() {
+        void Run(std::string mode) {
+            mode_name = mode;
             Setup();
-            Initialise(); 
+            Initialise(mode_name); 
 
             if (restart_from > 0) {
                 HandleRestart(); 
@@ -78,7 +79,8 @@ class simulation {
 
             while (D <= Dend + Dinc/10.0) {
                 auto t1 = std::chrono::high_resolution_clock::now();
-                printf("Increment number: %d, Applied displacement: %.*f\n", incr_count, prec, D);
+                printf("Increment number: %d\n",  incr_count);
+                printf("Applied displacement: %.*f\n",prec, D);
 
                 ApplyBoundaryConditions();
 
@@ -87,7 +89,28 @@ class simulation {
                     break;
                 }
 
-                SaveResults();
+                ExtractResults();
+                history_file.flush();
+
+                // periodic general full-field save
+                if (incr_count % save_freq == 0) {
+                    std::string filename = usfilename + std::to_string(incr_count) + ".csv";
+                    std::ofstream usfile(filename);
+                    std::cout << "Saving displacements and damage field results to " << filename << std::endl;
+                    usfile << "x,y,u,v,s\n";
+                    for(size_t i = 0; i < nodes.size(); ++i) {
+                        usfile << std::fixed << std::setprecision(prec) << nodes[i][0] << "," << nodes[i][1] << "," 
+                            << u[2*i] << "," << u[2*i+1] << "," << s[i] << "\n";
+                    }
+                    usfile.close();
+
+                    std::string h_out = Hfilename + std::to_string(incr_count) + ".csv";
+                    std::cout << "Saving history field results to " << h_out << std::endl;
+                    SaveHField(nodes, elements, H, mp.isQuadratic, quadratureDegree, h_out, prec, exx, eyy, exy, tr_e);
+                }
+
+                UpdateH(nodes, elements, u, H, E_int, E_bulk, nu_int, nu_bulk, mp.h2, mp.hi, 
+                    ls, isPlaneStress, mp.isQuadratic, quadratureDegree, exx, eyy, exy, tr_e);
 
                 auto t2 = std::chrono::high_resolution_clock::now();
                 std::chrono::duration<double> seconds = t2 - t1;
@@ -104,9 +127,58 @@ class simulation {
     protected:
         virtual void Setup() = 0;
         virtual void ApplyBoundaryConditions() = 0;
-        virtual void SaveResults() = 0;
+        virtual void ExtractResults() = 0;
         virtual double CalculateGcForRestart() = 0;
         // = 0 leaves open to intepretation depending on run parameters 
+        
+        void LoadParameters(const InputData& input){
+
+            // Geometry
+            mp.L = input.L; mp.h1 = input.h1; mp.h2 = input.h2; 
+            mp.hi = input.hi; mp.a0 = input.a0;
+
+            // Mesh Refinement
+            mp.Delta_y = input.Delta_y;
+            mp.Delta_y_max_ahead = input.Delta_y_max_ahead;
+            mp.Delta_y_max_behind = input.Delta_y_max_behind;
+            mp.GR_y_ahead = input.GR_y_ahead;
+            mp.GR_y_behind = input.GR_y_behind;
+            mp.Delta = input.Delta;
+            mp.Delta_x = input.Delta_x;
+            mp.Delta_x_max = input.Delta_x_max;
+            mp.yminus = input.yminus;
+            mp.yplus = input.yplus;
+            mp.xplus = input.xplus;
+            mp.xminus = input.xminus;
+            mp.GR_x = input.GR_x;
+            mp.isQuadratic = input.isQuadratic;
+            
+            // Materials & Physics
+            ls = input.ls;
+            t = input.t;
+            a_min = input.a_min;
+            E_int = input.E_int; nu_int = input.nu_int;
+            E_bulk = input.E_bulk; nu_bulk = input.nu_bulk;
+            Gc_int = input.Gc_int; Gc_bulk = input.Gc_bulk; Gc_eff = input.Gc_eff;
+            isPlaneStress = input.isPlaneStress;
+
+            // Solver
+            tol = input.tol;
+            relax = input.relax;
+            save_freq = input.save_freq;
+            restart_from = input.restart_from;
+            quadratureDegree = input.quadratureDegree;
+            
+            // Loading
+            D = input.Dinit;
+            Dend = input.Dend;
+            Dinc = input.Dinc;
+
+            s_threshold = 0.01;
+            prec = 16;
+
+        }
+
 
         std::vector<std::string> split(const std::string& line, char delimiter) {
             std::vector<std::string> tokens;
@@ -116,7 +188,7 @@ class simulation {
             return tokens;
         }
 
-        void IdentifyNodeSets() {
+        virtual void IdentifyNodeSets() { // default DCB logic, virtual to allow future BC changes
             sets = NodeSets();
 
             double findtol = mp.Delta/10;
@@ -174,11 +246,15 @@ class simulation {
             }
         }
 
-        void Initialise() {
+        void Initialise(std::string mode) {
+            mode_name = mode;
+            history_filename = "history_" + mode_name + ".csv";
+            usfilename       = "inc_" + mode_name + "=";
+            Hfilename        = "H_" + mode_name + ",inc=";
+
             int numNodes = nodes.size();
             int totalDOFs = 3 * numNodes;
             
-
             u = Eigen::VectorXd::Zero(2*numNodes);
             s = Eigen::VectorXd::Ones(numNodes);
 
@@ -198,6 +274,8 @@ class simulation {
             tr_e.assign(totalIPs, 0.0);
 
             constrained.clear();
+
+            // NOTE: the following block assumes DCB/ELS. overriding 'virtual void IdentifyNodeSets()' will require alterations here.
             for(int node : sets.initial_crack_nodes) constrained.push_back(2*numNodes + node);
             for(int node : sets.support_nodes) { constrained.push_back(2*node); constrained.push_back(2*node + 1); };
             for(int node : sets.lower_arm_end_nodes) constrained.push_back(2*node + 1);
@@ -314,32 +392,46 @@ class simulation {
 
                 int iter_count = 1;
                 while(true) {
-                    AssembleAll(nodes, elements, u, s, H, E_int, E_bulk, nu_int, nu_bulk, 
-                                Gc_eff, Gc_bulk, t, mp.h2, mp.hi, ls, K, F, triplets, 
+                    printf("Iteration: %d\n", iter_count);
+
+                    // 1. ASSEMBLE (Using state from previous iteration or Dinit)
+                    AssembleAll(nodes, elements, u, s, H, E_int, E_bulk, nu_int, nu_bulk,
+                                Gc_eff, Gc_bulk, t, mp.h2, mp.hi, ls, K, F, triplets,
                                 isPlaneStress, mp.isQuadratic, quadratureDegree);
 
+                    // 2. APPLY BC & REDUCE
                     ApplyDirichletBC(K, F, isConstrained, constrainedMap, freeMap, KR, FR);
 
-                    for(int i = 0; i < totalDOFs; ++i) if(freeMap[i] != -1) d_reduced[freeMap[i]] = d[i];
-                    residual = FR - KR * d_reduced;
-                    double R_norm = residual.norm() / FR.norm();
-                    printf("Iteration: %d, |R|/|F| = %.3e\n", iter_count, R_norm);
+                    // 3. BUILD REDUCED VECTOR
+                    for (int i = 0; i < totalDOFs; ++i) if (freeMap[i] != -1) d_reduced[freeMap[i]] = d[i];
 
-                    if(R_norm < tol) break;
-                    if(iter_count > 50) return false;
+                    // 4. SOLVE
+                    std::cout << "Solving... " << std::flush;
+                    residual = FR - KR * d_reduced; // Residual of the state BEFORE update
 
-                    if(firstLoop) { solver.analyzePattern(KR); firstLoop = false; }
-                    if(!solver.solve(KR, residual, Dd_reduced)) return false;
+                    if (firstLoop) { solver.analyzePattern(KR); firstLoop = false; }
+                    if (!solver.solve(KR, residual, Dd_reduced)) return false;
 
-                    for(int i = 0; i < totalDOFs; ++i) Dd[i] = (freeMap[i] != -1) ? Dd_reduced[freeMap[i]] : 0.0;
+                    // 5. RECONSTRUCT & UPDATE (Apply the increment)
+                    for (int i = 0; i < totalDOFs; ++i) Dd[i] = (freeMap[i] != -1) ? Dd_reduced[freeMap[i]] : 0.0;
+
                     d += relax * Dd;
-                    for(auto const& pair : constrainedMap) d[pair.first] = *pair.second;
+                    for (auto const& pair : constrainedMap) d[pair.first] = *pair.second;
 
-                    u = d.head(u.size()); s = d.tail(s.size());
+                    // Update local u and s so they are ready for the next AssembleAll OR SaveResults
+                    u = d.head(u.size()); 
+                    s = d.tail(s.size());
+                    std::cout << "Done! " << std::flush;
+
+                    // 6. CONVERGENCE CHECK (After update, using the residual from the solve)
+                    double R_norm = residual.norm() / FR.norm();
+                    printf("|R|/|F| = %.3e\n", R_norm);
+
+                    if (R_norm < tol) break; // LOOP BREAKS HERE
+                    if (iter_count > 50) return false;
+
                     iter_count++;
                 }
-                UpdateH(nodes, elements, u, H, E_int, E_bulk, nu_int, nu_bulk, mp.h2, mp.hi, 
-                    ls, isPlaneStress, mp.isQuadratic, quadratureDegree, exx, eyy, exy, tr_e);
             return true;
         }
         

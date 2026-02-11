@@ -5,7 +5,34 @@
 #include <fstream>
 #include <string>
 #include <algorithm>
-#include "modeI.h"
+
+
+struct InputData {
+    // Geometry
+    double L, h1, h2, hi, a0;
+    
+    // Physics & Materials
+    double ls, t, a_min;
+    double E_int, nu_int, Gc_int, Gc_eff;
+    double E_bulk, nu_bulk, Gc_bulk;
+    bool isPlaneStress;
+
+    // Mesh Refinement
+    double Delta_y, Delta_y_max_ahead, Delta_y_max_behind;
+    double GR_y_ahead, GR_y_behind;
+    double Delta, Delta_x, Delta_x_max;
+    double yminus, yplus, xplus, xminus;
+    double GR_x;
+    bool isQuadratic;
+    int quadratureDegree;
+
+    // Solver Controls
+    double tol, relax;
+    int save_freq, restart_from;
+    
+    // Loading
+    double Dinit, Dend, Dinc;
+};
 
 inline double find_val(const std::string& filename, const std::string& key) {
     std::ifstream file(filename);
@@ -40,7 +67,7 @@ inline double find_val(const std::string& filename, const std::string& key) {
 #define LOAD_PARAM(DATA, VAR, PATH) DATA.VAR = (decltype(DATA.VAR))find_val(PATH, #VAR)
 
 // Function to SAVE parameters
-inline void save_parameters(const std::string& filename, const ModeIInputData& data) {
+inline void save_parameters(const std::string& filename, const InputData& data) {
     std::ofstream out(filename);
     out.precision(16);
 
@@ -69,7 +96,7 @@ inline void save_parameters(const std::string& filename, const ModeIInputData& d
 }
 
 // Function to LOAD parameters
-inline void load_parameters(const std::string& filename, ModeIInputData& data) {
+inline void load_parameters(const std::string& filename, InputData& data) {
     std::cout << ">> Loading snapshot from: " << filename << std::endl;
 
     LOAD_PARAM(data, L, filename);       LOAD_PARAM(data, h1, filename);      LOAD_PARAM(data, h2, filename);

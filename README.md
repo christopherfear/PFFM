@@ -1,16 +1,18 @@
-# PFFM
+# PFFM: Phase-field fracture model solver
 
-- **`apps/main_modeI.cpp`** contains C++ code implementing a finite-element method (FEM) model of a double cantilever beam, which uses the phase-field fracture model for interface fracture propagation.
+- **`apps/main.cpp`** contains the unified C++ entry point for both mode-I DCB and mode-II ELS simulations. Allows clear modification of input parameters before simulation running.
 
-- **`apps/main_modeII.cpp`** contains C++ code implementing a finite-element method (FEM) model of an end loaded split test, which uses the phase-field fracture model for interface fracture propagation.
+- **`include/simulation.h`** is the parent class containing the core solver logic shared by all simulation types.
+
+- **`include/modeI.h`** and **`include/modeII.h`**  define the derived classes used for applying boundary conditions and data-saving logic for the DCB and ELS tests.
 
 - The diffuse phase-field damage interacts with the surrounding bulk material, which artificially increases the apparent interface fracture toughness (assuming the bulk material has a higher fracture toughness). This effect can be mitigated by using an effective fracture toughness value.
 
 - **`matlab/BVPSolverForGceff.m`** is a MATLAB script that pre-computes the effective fracture toughness for pure mode-I PFFM simulations using various methods.
 
-- **`matlab/BVPSolverForGceff_modeII.m`** *(Forthcoming)*: The script for pure mode-II effective toughness is currently being finalized for submission and will be released to this repository upon publication.
+- **`matlab/BVPSolverForGceff_modeII.m`** *(Forthcoming)*: The script for pure mode-II effective toughness is currently being finalised for submission and will be released to this repository upon publication.
 
-- **`legacy/`**: Contains the original, monolithic version of the solver scripts (Version 1). These are preserved for reference but are deprecated in favor of the optimised C++ architecture in apps/.
+- **`v1` (Branch)**: An archive of the initial development phases. This branch contains the legacy procedural implementation and the first refactor into a separate source/header structure. These have been superseded by the current framework on `main`.
 
 The associated academic journal article for the mode-I work is available [here](https://doi.org/10.1016/j.engfracmech.2025.111546).
 
@@ -47,7 +49,7 @@ If you prefer to build manually without the helper script:
 mkdir build && cd build
 cmake ..
 make
-./solver_modeI
+./pffm_solver I
 ```
 
 **Note:**
@@ -59,7 +61,7 @@ These flags enable high optimisation, disable unnecessary math error checking, a
 
 ## Usage
 
-Model parameters (geometry, material properties, solver settings, etc.) can be modified directly in the source code near the start of the main function in the `apps/` files. After changing these parameters, running the `run.sh` script will automatically recompile the code and save a snapshot of the parameters alongside the results for reproducibility.
+- Model parameters can be modified directly in the InputData struct within `apps/main.cpp`. The run.sh script automatically recompiles changes and saves a snapshot of the parameters alongside results for reproducibility.
 
 ## License
 

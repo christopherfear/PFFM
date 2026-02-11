@@ -6,11 +6,10 @@ set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE) #true for run false for debug
 
 # 1. Settings
 set(CMAKE_CXX_STANDARD 14)
-# Optimization flags
-#debugging
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0 -Wall")
-#optimised running
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fno-math-errno -DNDEBUG -march=native")
+# Optimisation flags
+
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0 -Wall") #debugging
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -fno-math-errno -DNDEBUG -march=native") #optimised running
 
 # 2. Include Paths
 include_directories(${CMAKE_SOURCE_DIR}/include)
@@ -37,5 +36,5 @@ file(GLOB SOURCE_FILES "src/*.cpp")
 add_library(pffm_core ${SOURCE_FILES})
 
 # 5. Create Executables
-add_executable(solver_modeI apps/main_modeI.cpp)
-target_link_libraries(solver_modeI pffm_core ${SPARSE_LIBS})
+add_executable(pffm_solver apps/main.cpp) 
+target_link_libraries(pffm_solver pffm_core ${SPARSE_LIBS})

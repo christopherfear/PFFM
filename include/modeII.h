@@ -1,17 +1,17 @@
-#ifndef MODEI_H
-#define MODEI_H
+#ifndef MODEII_H
+#define MODEII_H
 
 #include "simulation.h"
 #include "inputhandling.h"
 
-class ModeISimulation : public simulation { // inherit everything from simulation class
+class ModeIISimulation : public simulation { // inherit everything from simulation class
 
     InputData input; //store the inputs
 
 public:
-    ModeISimulation(const InputData& data_in, std::string mode) : input(data_in) {
-        this->mode_name = mode; 
-    }
+    ModeIISimulation(const InputData& data_in, std::string mode) : input(data_in) {
+    this->mode_name = mode;
+}
 
 protected:
 
@@ -21,18 +21,19 @@ protected:
         GenerateDCBMesh(mp, nodes, elements);
         IdentifyNodeSets();
         SaveGeometryData();
+    
     }
 
     void ApplyBoundaryConditions() override {
         
         for(int node : sets.upper_arm_end_nodes){*constrainedMap[2*node+1] = D;}
-        for(int node : sets.lower_arm_end_nodes){*constrainedMap[2*node+1] = -D;}
+        for(int node : sets.lower_arm_end_nodes){*constrainedMap[2*node+1] = D;}
 
     }
 
     double CalculateGcForRestart() override {
 
-        return GetGcFromdPidA(D1_history, F1_history, a_history, U_history, a_min);
+        return GetGcfromCC(D1_history, F1_history, F2_history, a_history, a_min, t);
     }
 
     void ExtractResults() override {
@@ -52,15 +53,16 @@ protected:
         double U = 0.5*u.dot(K.topLeftCorner(u.size(), u.size())*u);
         U_history.push_back(U);
 
-        // Gc calculation specific to mode-I
-        double current_Gc = GetGcFromdPidA(D1_history, F1_history, a_history, U_history, a_min);
+        // Gc calculation specific to mode-II
+        double current_Gc = GetGcfromCC(D1_history, F1_history, F2_history, a_history, a_min, t);
         Gc_history.push_back(current_Gc);
-        std::cout << "Gc from -dPi/dA = " << current_Gc << std::endl;
+        std::cout << "Gc from CC = " << current_Gc << std::endl;
 
         // history.csv save
         std::cout << "Saving history.csv" << std::endl;
         history_file << incr_count << "," << D << "," << F1 << "," << D << "," << F2 << "," 
                      << crack_length << "," << current_Gc << "," << U << std::endl;
+         
     }
 
 };

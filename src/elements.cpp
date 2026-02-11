@@ -511,7 +511,7 @@ void GetLinearElementTensileElasticStrainEnergy(
         Eigen::Vector3d sigma = D*epsilon;
         double epsilon_vol = epsilon(0) + epsilon(1);
         double sigma_vol = (sigma(0) + sigma(1))/2.;
-        bool tensile = (sigma_vol > -1e-16); 
+        bool tensile = (sigma_vol > -std::numeric_limits<double>::epsilon()); 
 
         double U = 0.5*sigma.transpose()*epsilon;
         double U_vol = 0.5*K*epsilon_vol*epsilon_vol;
@@ -630,7 +630,7 @@ void GetQuadraticElementTensileElasticStrainEnergy(
         
         double epsilon_vol = epsilon(0) + epsilon(1);
         double sigma_vol = (sigma(0) + sigma(1))/2.;
-        bool tensile = (sigma_vol > -1e-16);
+        bool tensile = (sigma_vol > -std::numeric_limits<double>::epsilon());
 
         double U = 0.5*sigma.transpose()*epsilon;
         double U_vol = 0.5*K*epsilon_vol*epsilon_vol;
