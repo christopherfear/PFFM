@@ -8,13 +8,11 @@
 
 - The diffuse phase-field damage interacts with the surrounding bulk material, which artificially increases the apparent interface fracture toughness (assuming the bulk material has a higher fracture toughness). This effect can be mitigated by using an effective fracture toughness value.
 
-- **`matlab/BVPSolverForGceff.m`** is a MATLAB script that pre-computes the effective fracture toughness for pure mode-I PFFM simulations using various methods.
-
-- **`matlab/BVPSolverForGceff_modeII.m`** *(Forthcoming)*: The script for pure mode-II effective toughness is currently being finalised for submission and will be released to this repository upon publication.
+- **`matlab/BVPSolverForGceff_modeI.m`** and **`matlab/BVPSolverForGceff_modeII.m`** are MATLAB scripts that pre-compute the effective fracture toughness for pure mode-I and pure mode-II PFFM simulations, respectively, using various methods.
 
 - **`v1` (Branch)**: An archive of the initial development phases. This branch contains the legacy procedural implementation and the first refactor into a separate source/header structure. These have been superseded by the current framework on `main`.
 
-The associated academic journal article for the mode-I work is available [here](https://doi.org/10.1016/j.engfracmech.2025.111546).
+The associated academic journal article for the mode-I work is available [here](https://doi.org/10.1016/j.engfracmech.2025.111546) and the mode-II work is available [here](https://doi.org/10.1016/j.tafmec.2026.105666).
 
 ## Requirements
 
@@ -70,4 +68,8 @@ See the [LICENSE](./LICENSE) file for details.
 
 ## Citation
 
-C. A. Fear, S. Wang, C. M. Harvey (2025), [Effective fracture toughness in phase-field models for interface fracture](https://doi.org/10.1016/j.engfracmech.2025.111546), Engineering Fracture Mechanics (328), 111546.
+### Mode-I
+- C. A. Fear, S. Wang, C. M. Harvey (2025), [Effective fracture toughness in phase-field models for interface fracture](https://doi.org/10.1016/j.engfracmech.2025.111546), Engineering Fracture Mechanics (328), 111546.
+
+### Mode-II
+- C. A. Fear, C. M. Harvey (2026), [Effective fracture toughness in phase-field models for mode-II interface fracture: A maximum energy envelope method](https://doi.org/10.1016/j.tafmec.2026.105666), Theoretical and Applied Fracture Mechanics (145), 105666.
